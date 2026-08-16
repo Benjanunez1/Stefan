@@ -13,44 +13,49 @@ export async function POST(req: NextRequest) {
   try {
     const { message, history } = await req.json();
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: "Falta configurar ANTHROPIC_API_KEY en .env.local" },
+        { error: "Falta configurar GEMINI_API_KEY en Vercel" },
         { status: 500 }
       );
     }
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 500,
-        system: SYSTEM_PROMPT,
-        messages: [...(history || []), { role: "user", content: message }],
-      }),
-    });
+    const contents = [
+      ...(history || []).map((m: any) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      })),
+      { role: "user", parts: [{ text: message }] },
+    ];
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents,
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errText = await response.text();
       return NextResponse.json(
-        { error: `Error de la API de Claude: ${errText}` },
+        { error: `Error de la API de Gemini: ${errText}` },
         { status: response.status }
       );
     }
 
     const data = await response.json();
-    const textBlock = data.content?.find((c: any) => c.type === "text");
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    return NextResponse.json({ reply: textBlock?.text || "" });
+    return NextResponse.json({ reply });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Error desconocido" },
       { status: 500 }
     );
   }
-  }
+}
