@@ -31,10 +31,15 @@ export default function Home() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number>();
+  const estadoRef = useRef<EstadoNucleo>("inactivo");
 
   useEffect(() => {
     setRecordatorios(obtenerRecordatorios());
   }, []);
+
+  useEffect(() => {
+    estadoRef.current = estado;
+  }, [estado]);
 
   const medirAmplitud = () => {
     const analyser = analyserRef.current;
@@ -46,7 +51,7 @@ export default function Home() {
     rafRef.current = requestAnimationFrame(medirAmplitud);
   };
 
-  const iniciarEscucha = async () => {
+  const iniciarEscucha = () => {
     setError("");
     setTranscript("");
     setRespuesta("");
@@ -61,20 +66,6 @@ export default function Home() {
       return;
     }
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const audioCtx = new AudioContext();
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
-      source.connect(analyser);
-      audioCtxRef.current = audioCtx;
-      analyserRef.current = analyser;
-      medirAmplitud();
-    } catch {
-      // Si falla el análisis de amplitud, seguimos igual sin esa animación extra.
-    }
-
     const recognition = new SpeechRecognition();
     recognition.lang = IDIOMA_RECONOCIMIENTO;
     recognition.interimResults = false;
@@ -86,18 +77,40 @@ export default function Home() {
       procesarMensaje(texto);
     };
 
-    recognition.onerror = () => {
-      setError("No te escuché bien, probá de nuevo.");
+    recognition.onerror = (event: any) => {
+      setError(`No te escuché bien (${event.error}). Probá de nuevo.`);
       detenerEscucha();
     };
 
     recognition.onend = () => {
-      if (estado === "escuchando") setEstado("inactivo");
+      if (estadoRef.current === "escuchando") {
+        setEstado("inactivo");
+      }
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
-    setEstado("escuchando");
+
+    try {
+      recognition.start();
+      setEstado("escuchando");
+    } catch (e) {
+      setError("No pude iniciar el micrófono. Probá tocar 'Hablar' de nuevo.");
+      return;
+    }
+
+    navigator.mediaDevices
+      ?.getUserMedia({ audio: true })
+      .then((stream) => {
+        const audioCtx = new AudioContext();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        audioCtxRef.current = audioCtx;
+        analyserRef.current = analyser;
+        medirAmplitud();
+      })
+      .catch(() => {});
   };
 
   const detenerEscucha = () => {
@@ -105,6 +118,7 @@ export default function Home() {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     audioCtxRef.current?.close();
     setAmplitud(0);
+    setEstado("inactivo");
   };
 
   const procesarMensaje = async (texto: string) => {
@@ -294,4 +308,4 @@ function BotonRapido({ texto, onClick }: { texto: string; onClick: () => void })
       {texto}
     </button>
   );
-    }
+        }
