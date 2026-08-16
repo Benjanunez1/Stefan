@@ -1,0 +1,16 @@
+{
+  "name": "Stefan",
+  "short_name": "Stefan",
+  "description": "Asistente de voz de Benja",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030303",
+  "theme_color": "#030303",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
